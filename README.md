@@ -4,4 +4,4 @@
 
 # Сбор данных
 
-Данные собирали при помощи скрипта. Логировали трафик при помощи Wireshark'a. Данные лежат на гугл-диске: https://drive.google.com/drive/folders/1eVgfbJcmDYXjEWhyX50MCo2UEBVxEjqM
+Данные собирали при помощи скрипта. Логировали трафик при помощи Wireshark'a. Данные лежат на гугл-диске: https://disk.yandex.ru/d/SRpp1XyYiXiZlg
