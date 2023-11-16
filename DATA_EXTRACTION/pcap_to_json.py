@@ -1,8 +1,7 @@
 import sys, os, re, json, glob
 import pyshark
 import yadisk, io
-from threading import Lock
-from multiprocessing import Pool
+from multiprocessing import Pool, Lock
 
 def prepare_for_output(pre_json_object):
     if type(pre_json_object) == str:
