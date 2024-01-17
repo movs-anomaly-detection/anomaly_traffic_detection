@@ -1,0 +1,9 @@
+{
+    "proto": "tcp",
+    "country": "Germany",
+    "addr_1": 140,
+    "addr_2": 82,
+    "num_timestamps": -0.102545,
+    "mean_timestamps": -0.769658,
+    "median_timestamps": -0.185151
+}

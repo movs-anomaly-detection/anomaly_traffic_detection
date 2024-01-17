@@ -1,0 +1,9 @@
+{
+    "proto": "tcp",
+    "country": "Bulgaria",
+    "addr_1": 92,
+    "addr_2": 118,
+    "num_timestamps": 0.28194133283113876,
+    "mean_timestamps": -1.3031353401738268,
+    "median_timestamps": -0.3584063850616776
+}
