@@ -1,0 +1,34 @@
+[tool.poetry]
+name = "year-project"
+version = "0.1.0"
+description = "anomaly detection"
+authors = ["Lisichkina Suslov Duzhenko"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+config-reader = "^0.8"
+catboost = "^1.2.2"
+aiogram = "^3.3.0"
+pandas = "^2.1.4"
+joblib = "^1.3.2"
+logging = "^0.4.9.6"
+
+
+[tool.poetry.group.data_capture.dependencies]
+cryptography = "^41.0.7"
+pyshark = "^0.6"
+dotenv = "^0.0.5"
+yadisk = "^2.1.0"
+
+
+[tool.poetry.group.machine_learning_models.dependencies]
+catboost = "^1.2.2"
+seaborn = "^0.13.1"
+matplotlib = "^3.8.2"
+tqdm = "^4.66.1"
+pyod = "^1.1.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
