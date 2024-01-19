@@ -84,11 +84,11 @@ class SessionAllotter:
         if pre_json_object is None or pre_json_object == 'None':
             return None
         if issubclass(type(pre_json_object), str):
-            if re.fullmatch(r'([0-9a-f][0-9a-f]:)+[0-9a-f][0-9a-f]', pre_json_object) != None:
+            if re.fullmatch(r'([0-9a-f][0-9a-f]:)+[0-9a-f][0-9a-f]', pre_json_object) is not None:
                 pre_json_object = pre_json_object.replace(':', '')
-            if re.fullmatch(r'0x[0-9a-f]+', pre_json_object) != None:
+            if re.fullmatch(r'0x[0-9a-f]+', pre_json_object) is not None:
                 pre_json_object = int(pre_json_object, base=16)
-            elif re.fullmatch(r'\d+', pre_json_object) != None:
+            elif re.fullmatch(r'\d+', pre_json_object) is not None:
                 pre_json_object = int(pre_json_object)
             return pre_json_object
         if type(pre_json_object) is list:
@@ -211,22 +211,22 @@ class PCAPParser:
     '''
     
     def __init__(self, pcap_filename: str, preferences: dict = {}):
-        self.parser = SessionAllotter()
-        self.captured = pyshark.FileCapture(
+        self.__parser = SessionAllotter()
+        self.__captured = pyshark.FileCapture(
             pcap_filename, display_filter='ip',
             override_prefs=preferences, use_json=True
         )
-        self.captured.apply_on_packets(self.parser)
+        self.__captured.apply_on_packets(self.parser)
     
     def stop(self):
         # try:
         #     (parser, self.captured)
         # except:
         #     print('Something went wrong...')
-        return self.parser.sessions_info, self.parser.nodes_info
+        return self.__parser.sessions_info, self.parser.nodes_info
     
     def __del__(self):
-        self.captured.close()
+        self.__captured.close()
 
 
 class LiveParser:
@@ -234,29 +234,30 @@ class LiveParser:
     Класс для парсинга интернет-трафика с сетевой карты
     '''
     
-    lock = Lock()
-    run: bool
-    pool = ThreadPool(processes=1)
+    __lock = Lock()
+    __run = False
+    __pool = ThreadPool(processes=1)
     
     def __handle_(self, interface: str, preferences: dict):
         parser = SessionAllotter()
-        for packet in pyshark.LiveCapture(
+        with pyshark.LiveCapture(
             interface, bpf_filter='ip',
             override_prefs=preferences, use_json=True
-        ).sniff_continuously():
-            parser(packet)
-            with self.lock:
-                if not self.run: break
+        ) as live_capture:
+            for packet in live_capture.sniff_continuously():
+                parser(packet)
+                with self.__lock:
+                    if not self.__run: break
         return parser.sessions_info, parser.nodes_info
     
     def __init__(self, interface: str, preferences: dict = {}):
-        self.run = True
-        self.result = self.pool.apply_async(func=lambda: self.__handle_(interface, preferences))
+        self.__run = True
+        self.__result = self.__pool.apply_async(func=lambda: self.__handle_(interface, preferences))
     
     def stop(self):
-        with self.lock:
-            self.run = False
-        return self.result.get()
+        with self.__lock:
+            self.__run = False
+        return self.__result.get()
     
     def __del__(self):
-        self.pool.close()
+        self.__pool.close()
