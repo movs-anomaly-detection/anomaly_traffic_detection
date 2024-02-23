@@ -1,4 +1,5 @@
 from collections import Counter
+import itertools
 import re
 import pyshark
 # import maxminddb
@@ -55,10 +56,6 @@ class SessionAllotter:
     
     @property
     def nodes_info(self):
-        return self.__nodes_info
-
-    @nodes_info.getter
-    def nodes_info(self):
         def remove_prefix(obj):
             ret = { ('addr',obj[0]) }
             new_list = [dict(set(SessionAllotter.__get_dict_(s).items()) - ret) for s in obj[1]]
@@ -66,10 +63,6 @@ class SessionAllotter:
         return list(map(remove_prefix, self.__nodes_info.items()))
 
     @property
-    def sessions_info(self):
-        return self.__sessions_info
-    
-    @sessions_info.getter
     def sessions_info(self):
         def create_dict(item):
             dict_item = SessionAllotter.__get_dict_(item[0])
@@ -83,7 +76,7 @@ class SessionAllotter:
     def get_fields(cls, pre_json_object) -> dict:
         if pre_json_object is None or pre_json_object == 'None':
             return None
-        if issubclass(type(pre_json_object), str):
+        if isinstance(pre_json_object, str):
             if re.fullmatch(r'([0-9a-f][0-9a-f]:)+[0-9a-f][0-9a-f]', pre_json_object) is not None:
                 pre_json_object = pre_json_object.replace(':', '')
             if re.fullmatch(r'0x[0-9a-f]+', pre_json_object) is not None:
@@ -91,11 +84,11 @@ class SessionAllotter:
             elif re.fullmatch(r'\d+', pre_json_object) is not None:
                 pre_json_object = int(pre_json_object)
             return pre_json_object
-        if type(pre_json_object) is list:
+        if isinstance(pre_json_object, list):
             return [cls.get_fields(value) for value in pre_json_object]
-        if type(pre_json_object) is bytes:
+        if isinstance(pre_json_object, bytes):
             return pre_json_object.hex()
-        if type(pre_json_object) is int:
+        if isinstance(pre_json_object, int):
             return pre_json_object
         
         if hasattr(pre_json_object, 'field_names'):
@@ -105,7 +98,7 @@ class SessionAllotter:
                 
                 if not key.endswith('_tree'):
                     key = key.split('.')[-1]
-                    if key == 'certificate' and type(value) is list:
+                    if key == 'certificate' and isinstance(value, list):
                         def get_cert_info(raw_cert: str):
                             if len(raw_cert) % 2 != 0:
                                 return {}
@@ -152,13 +145,11 @@ class SessionAllotter:
         pack_info = dict()
         
         sess_key = None
-        for name in tr_layers:
-            if name in packet:
-                pack_info = { 'timestamp':float(packet.sniff_timestamp) }
-                pack = packet[name]
-                sess_key = f'addr={ip_addr}:{pack.srcport} proto={name}'
-                break
-        
+        for name in filter(lambda name: name in packet, tr_layers):
+            pack_info = { 'timestamp':float(packet.sniff_timestamp) }
+            pack = packet[name]
+            sess_key = f'addr={ip_addr}:{pack.srcport} proto={name}'
+            break
         if sess_key is None: return
         
         self.__sessions_info[sess_key] = self.__sessions_info.get(sess_key, (dict(), list(), EntropyComputer()))
@@ -168,39 +159,41 @@ class SessionAllotter:
         sess_layers = ['tls']
         
         for name in sess_layers:
-            if name in packet:
-                packs = packet.get_multiple_layers(name)
-                pack_info[name] = list()
-                for pack in packs:
-                    if hasattr(pack, 'record'):
-                        records = pack.record if type(pack.record) is list else [pack.record]
-                        for rec in records:
-                            if hasattr(rec, 'handshake'):
-                                session_info = self.__sessions_info[sess_key][0].get('handshake', list())
-                                handshake_msg = self.get_fields(rec.get_field('handshake'))
-                                
-                                def hs_fields_parse(hmsg):
-                                    if hmsg is not None:
-                                        hmsg['timestamp'] = pack_info['timestamp']
-                                        return hmsg
-                                
-                                if type(handshake_msg) is list:
-                                    session_info.extend(filter(lambda x: x is not None, map(hs_fields_parse, handshake_msg)))
-                                elif handshake_msg is not None:
-                                    session_info.append(hs_fields_parse(handshake_msg))
-                                
-                                self.__sessions_info[sess_key][0]['handshake'] = session_info
+            if name not in packet:
+                continue
+            packs = packet.get_multiple_layers(name)
+            pack_info[name] = list()
+            for pack in filter(lambda pack: hasattr(pack, 'record') and not isinstance(pack.record, str), packs):
+                records = pack.record if isinstance(pack.record, list) else [pack.record]
+                for rec in records:
+                    if hasattr(rec, 'handshake'):
+                        session_info = self.__sessions_info[sess_key][0].get('handshake', list())
+                        handshake_msg = self.get_fields(rec.get_field('handshake'))
+                        
+                        def hs_fields_parse(hmsg):
+                            if hmsg is not None:
+                                hmsg['timestamp'] = pack_info['timestamp']
+                                return hmsg
+                        
+                        if isinstance(handshake_msg, list):
+                            session_info.extend(filter(lambda x: x is not None, map(hs_fields_parse, handshake_msg)))
+                        elif handshake_msg is not None:
+                            session_info.append(hs_fields_parse(handshake_msg))
+                        
+                        self.__sessions_info[sess_key][0]['handshake'] = session_info
+                    else:
+                        tls_pack = self.get_fields(rec)
+                        
+                        def tls_packet(msg):
+                            if 'app_data' in msg:
+                                self.__sessions_info[sess_key][2].new_data(bytes.fromhex(msg['app_data']))
                             else:
-                                tls_pack = self.get_fields(rec)
-                                def tls_packet(msg):
-                                    if 'app_data' in msg:
-                                        self.__sessions_info[sess_key][2].new_data(bytes.fromhex(msg['app_data']))
-                                    else:
-                                        pack_info[name].append(msg)
-                                if type(tls_pack) is list:
-                                    for p in tls_pack: tls_packet(p)
-                                else:
-                                    tls_packet(tls_pack)
+                                pack_info[name].append(msg)
+                        
+                        if isinstance(tls_pack, list):
+                            for p in tls_pack: tls_packet(p)
+                        elif tls_pack is not None:
+                            tls_packet(tls_pack)
         
         self.__sessions_info[sess_key][1].append(pack_info)
 
@@ -216,16 +209,12 @@ class PCAPParser:
             pcap_filename, display_filter='ip',
             override_prefs=preferences, use_json=True
         )
-        self.__captured.apply_on_packets(self.parser)
+        self.__captured.apply_on_packets(self.__parser)
+        
+    def __enter__(self):
+        return self.__parser
     
-    def stop(self):
-        # try:
-        #     (parser, self.captured)
-        # except:
-        #     print('Something went wrong...')
-        return self.__parser.sessions_info, self.parser.nodes_info
-    
-    def __del__(self):
+    def __exit__(self, type, value, traceback):
         self.__captured.close()
 
 
@@ -234,30 +223,50 @@ class LiveParser:
     Класс для парсинга интернет-трафика с сетевой карты
     '''
     
-    __lock = Lock()
-    __run = False
     __pool = ThreadPool(processes=1)
     
-    def __handle_(self, interface: str, preferences: dict):
-        parser = SessionAllotter()
-        with pyshark.LiveCapture(
-            interface, bpf_filter='ip',
-            override_prefs=preferences, use_json=True
-        ) as live_capture:
-            for packet in live_capture.sniff_continuously():
-                parser(packet)
-                with self.__lock:
-                    if not self.__run: break
-        return parser.sessions_info, parser.nodes_info
-    
     def __init__(self, interface: str, preferences: dict = {}):
-        self.__run = True
-        self.__result = self.__pool.apply_async(func=lambda: self.__handle_(interface, preferences))
+        self.__interface, self.__preferences = interface, preferences
     
-    def stop(self):
-        with self.__lock:
-            self.__run = False
-        return self.__result.get()
+    def __enter__(self):
+        class InnerLiveParser:
+            __lock = Lock()
+            __run = False
+            __info = None
+            
+            def __handle_(self, interface: str, preferences: dict):
+                self.__run = True
+                parser = SessionAllotter()
+                with pyshark.LiveCapture(
+                    interface, bpf_filter='ip',
+                    override_prefs=preferences, use_json=True
+                ) as live_capture:
+                    for packet in live_capture.sniff_continuously():
+                        parser(packet)
+                        with self.__lock:
+                            if not self.__run: break
+                return (parser.sessions_info, parser.nodes_info)
+            
+            def __init__(self, pool: ThreadPool, interface: str, preferences: dict):
+                self.__result = pool.apply_async(func=lambda: self.__handle_(interface, preferences))
+            
+            @property
+            def nodes_info(self):
+                if self.__info is None:
+                    with self.__lock:
+                        self.__run = False
+                    self.__info = self.__result.get()
+                return self.__info.nodes_info
+
+            @property
+            def sessions_info(self):
+                if self.__info is None:
+                    with self.__lock:
+                        self.__run = False
+                    self.__info = self.__result.get()
+                return self.__info.session_info
+            
+        return InnerLiveParser(self.__pool, self.__interface, self.__preferences)
     
-    def __del__(self):
+    def __exit__(self, type, value, traceback):
         self.__pool.close()

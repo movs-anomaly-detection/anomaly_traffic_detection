@@ -20,7 +20,7 @@ try:
     prefs = {
         'ssl.desegment_ssl_records': 'TRUE',
         'ssl.desegment_ssl_application_data': 'TRUE',
-        'tcp.desegment_tcp_streams': 'TRUE' 
+        'tcp.desegment_tcp_streams': 'TRUE'
     }
     if len(sys.argv) == 4:
         if sys.argv[3].endswith(".key"):
@@ -50,6 +50,7 @@ pcap_file_mask = pcap_file_mask.removeprefix(needed_dir)
 
 write_lock = Lock()
 
+
 def write(sessions_info, nodes_info, pcap_file):
     # самый популярный ip-адрес - это тот с которого записывали
     ip_key = Counter(map(lambda sess: sess['addr'], sessions_info)).most_common(1)[0][0]
@@ -70,17 +71,19 @@ def write(sessions_info, nodes_info, pcap_file):
         with open(f'{save_to}/sessions_of_{pcap_file}.json', 'w') as f:
             json.dump(sessions_info, f, sort_keys=True, indent=2)
 
+
 files_range = glob.glob(pcap_file_mask, root_dir=needed_dir)
+
 
 def get_sessions(pcap_file: str):
     print(f'Begin handling of {pcap_file}\n', end='')
     
-    parser = parsers.PCAPParser(needed_dir + pcap_file, prefs)
-    sessions_info, nodes_info = parser.stop()
-    with write_lock:
-        write(sessions_info, nodes_info, pcap_file)
+    with parsers.PCAPParser(needed_dir + pcap_file, prefs) as parser:
+        with write_lock:
+            write(parser.sessions_info, parser.nodes_info, pcap_file)
     
     print(f'End handling of {pcap_file}\n', end='')
+
 
 with ThreadPool(min(4, len(files_range))) as p:
     results = p.map(get_sessions, files_range)
