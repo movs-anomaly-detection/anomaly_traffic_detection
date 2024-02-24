@@ -4,6 +4,4 @@
 **/.idea
 **/.env
 **/.venv
-bot/anomaly_traffic_detection_bot/.env
-bot/data_capture/.env
-bot/anomaly_traffic_detection_bot/.env
+**/.vscode
