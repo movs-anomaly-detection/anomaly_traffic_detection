@@ -18,7 +18,7 @@ logging = "^0.4.9.6"
 [tool.poetry.group.data_capture.dependencies]
 cryptography = "^41.0.7"
 pyshark = "^0.6"
-dotenv = "^0.0.5"
+python-dotenv = "^1.0.0"
 yadisk = "^2.1.0"
 
 
